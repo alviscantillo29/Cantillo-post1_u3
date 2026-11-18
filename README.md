@@ -218,5 +218,45 @@ A pesar de que ambas instrucciones comparten exactamente la misma longitud físi
 
 ---
 
+# PARTE 2: Ensamblado y Ejecución Paso a Paso
 
-*Parte 2 en proceso...*
+### Paso 1 a 4: Programa de Suma con Traza Completa
+
+Se ingresa en `CS:0100` un programa que acumula tres sumandos en `AX`:
+```dos
+-A 100
+1357:0100 MOV AX, 000A
+1357:0103 MOV BX, 0005
+1357:0106 MOV CX, 0003
+1357:0109 ADD AX, BX
+1357:010B ADD AX, CX
+1357:010D INT 20
+1357:010F
+-U 100 10E
+1357:0100 B80A00        MOV     AX,000A
+1357:0103 BB0500        MOV     BX,0005
+1357:0106 B90300        MOV     CX,0003
+1357:0109 03C3          ADD     AX,BX
+1357:010B 03C1          ADD     AX,CX
+1357:010D CD20          INT     20
+```
+
+Se ejecuta paso a paso con el comando `T`, obteniendo la traza detallada:
+
+#### Tabla de Traza 1: Programa de Suma de Tres Operandos
+| Paso | Instrucción Ejecutada | AX | BX | CX | IP Sig. | ZF | CF | SF | Observaciones del Estado |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Inicio** | *(Estado antes de ejecutar)* | `0000` | `0000` | `0000` | `0100` | NZ | NC | PL | Registros en cero tras inicialización |
+| **1** | `MOV AX, 000A` | `000A` | `0000` | `0000` | `0103` | NZ | NC | PL | Se carga 10 decimal en AX (no altera banderas) |
+| **2** | `MOV BX, 0005` | `000A` | `0005` | `0000` | `0106` | NZ | NC | PL | Se carga 5 decimal en BX |
+| **3** | `MOV CX, 0003` | `000A` | `0005` | `0003` | `0109` | NZ | NC | PL | Se carga 3 decimal en CX |
+| **4** | `ADD AX, BX` | `000F` | `0005` | `0003` | `010B` | NZ | NC | PL | AX = 10 + 5 = 15 (`000Fh`), resultado no nulo ni negativo |
+| **5** | `ADD AX, CX` | `0012` | `0005` | `0003` | `010D` | NZ | NC | PL | AX = 15 + 3 = 18 (`0012h`), resultado final verificado |
+| **6** | `INT 20` | `0012` | `0005` | `0003` | `010D` | NZ | NC | PL | Proceso finalizado de forma normal |
+
+> **Checkpoint 1 (Parte 2):** Evidencia guardada en `capturas/CP1_traza_suma.png`.
+
+---
+
+
+*Trazas adicionales en proceso...*
