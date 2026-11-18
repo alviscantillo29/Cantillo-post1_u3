@@ -258,5 +258,65 @@ Se ejecuta paso a paso con el comando `T`, obteniendo la traza detallada:
 
 ---
 
+### Paso 5 a 7: Programa con Bucle usando `LOOP` y `CX`
 
-*Trazas adicionales en proceso...*
+Se ensambla un bucle acumulador que suma el valor `2` cuatro veces consecutivas en `AX`:
+```dos
+-A 100
+1357:0100 MOV AX, 0000
+1357:0103 MOV CX, 0004
+1357:0106 ADD AX, 0002
+1357:010A LOOP 0106
+1357:010C INT 20
+1357:010E
+-U 100 10D
+1357:0100 B80000        MOV     AX,0000
+1357:0103 B90400        MOV     CX,0004
+1357:0106 050200        ADD     AX,+02
+1357:0109 E2FB          LOOP    0106
+1357:010B CD20          INT     20
+```
+
+#### Cálculo del Desplazamiento Relativo del Salto `LOOP`:
+La instrucción `LOOP 0106` se codifica en código máquina como `E2 FB`:
+* Opcode: `E2` (instrucción `LOOP`).
+* Desplazamiento relativo firmado (8 bits): `FBh` (representación en complemento a dos de $-5$).
+$$\text{Desplazamiento} = \text{Dirección Destino} - \text{Dirección Siguiente}$$
+$$\text{Desplazamiento} = 0106\text{h} - 010B\text{h} = -5\text{d} = \text{FBh}$$
+
+#### Tabla de Traza 2: Bucle con Instrucción `LOOP` (10 Invocaciones)
+| N° | Iteración | Instrucción Ejecutada | AX Después | CX Después | IP Sig. | ¿LOOP salta? | Comentario y Estado |
+| :---: | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
+| **1** | Init | `MOV AX, 0000` | `0000` | `0000` | `0103` | — | Acumulador inicializado en cero |
+| **2** | Init | `MOV CX, 0004` | `0000` | `0004` | `0106` | — | Contador de iteraciones fijado en 4 |
+| **3** | Iter 1 | `ADD AX, 0002` | `0002` | `0004` | `0109` | — | Primera suma: AX = 2 |
+| **4** | Iter 1 | `LOOP 0106` | `0002` | `0003` | `0106` | **Sí** | CX pasa a 3 (CX ≠ 0); salta a 0106h |
+| **5** | Iter 2 | `ADD AX, 0002` | `0004` | `0003` | `0109` | — | Segunda suma: AX = 4 |
+| **6** | Iter 2 | `LOOP 0106` | `0004` | `0002` | `0106` | **Sí** | CX pasa a 2 (CX ≠ 0); salta a 0106h |
+| **7** | Iter 3 | `ADD AX, 0002` | `0006` | `0002` | `0109` | — | Tercera suma: AX = 6 |
+| **8** | Iter 3 | `LOOP 0106` | `0006` | `0001` | `0106` | **Sí** | CX pasa a 1 (CX ≠ 0); salta a 0106h |
+| **9** | Iter 4 | `ADD AX, 0002` | `0008` | `0001` | `0109` | — | Cuarta suma: AX = 8 |
+| **10**| Iter 4 | `LOOP 0106` | `0008` | `0000` | `010B` | **No** | CX pasa a 0; bucle finaliza sin saltar |
+| **11**| Fin | `INT 20` | `0008` | `0000` | `010B` | — | Terminación normal verificada (`AX = 8`) |
+
+> **Checkpoint 2 (Parte 2):** Evidencia guardada en `capturas/CP2_traza_loop.png`.
+
+---
+
+### Paso 8: Análisis del Código Máquina con `D`
+Se inspecciona la memoria con `D CS:100 L0C`:
+```dos
+-D CS:100 L0C
+1357:0100  B8 00 00 B9 04 00 05 02-00 E2 FB CD 20           ...
+```
+* `B8 00 00` $\rightarrow$ `MOV AX, 0000` (3 bytes)
+* `B9 04 00` $\rightarrow$ `MOV CX, 0004` (3 bytes)
+* `05 02 00` $\rightarrow$ `ADD AX, 0002` (3 bytes)
+* `E2 FB` $\rightarrow$ `LOOP 0106` (2 bytes)
+* `CD 20` $\rightarrow$ `INT 20` (2 bytes)  
+*Total del programa con LOOP:* **13 bytes**.
+
+---
+
+
+*Bucle alternativo y conclusiones en proceso...*
