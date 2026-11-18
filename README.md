@@ -318,5 +318,110 @@ Se inspecciona la memoria con `D CS:100 L0C`:
 
 ---
 
+### Paso 9 a 12: Bucle Equivalente con `DEC/JNZ` y Comando `G`
 
-*Bucle alternativo y conclusiones en proceso...*
+Se implementa el bucle manual en la dirección `CS:0200`:
+```dos
+-A 200
+1357:0200 MOV AX, 0000
+1357:0203 MOV CX, 0004
+1357:0206 ADD AX, 0002
+1357:0209 DEC CX
+1357:020A JNZ 0206
+1357:020C INT 20
+1357:020E
+-U 200 20D
+1357:0200 B80000        MOV     AX,0000
+1357:0203 B90400        MOV     CX,0004
+1357:0206 050200        ADD     AX,+02
+1357:0209 49            DEC     CX
+1357:020A 75FA          JNZ     0206
+1357:020C CD20          INT     20
+```
+
+* `DEC CX`: Opcode `49` (1 byte). Decrementa `CX` y actualiza `ZF` (no altera `CF`).
+* `JNZ 0206`: Opcode `75` + desplazamiento `FAh` ($-6$ en complemento a dos: $0206\text{h} - 020C\text{h} = -6$). Ocupa 2 bytes.
+* *Control de bucle:* `DEC` + `JNZ` ocupa **3 bytes** en dos instrucciones, frente a **2 bytes** en una sola instrucción con `LOOP`.
+
+#### Tabla de Traza 3: Bucle con `DEC CX` y `JNZ` (15 Invocaciones)
+| N° | Iteración | Instrucción Ejecutada | AX Después | CX Después | IP Sig. | ¿JNZ salta? | Comentario y Estado de Banderas |
+| :---: | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
+| **1** | Init | `MOV AX, 0000` | `0000` | `0000` | `0203` | — | Acumulador inicializado |
+| **2** | Init | `MOV CX, 0004` | `0000` | `0004` | `0206` | — | Contador fijado en 4 |
+| **3** | Iter 1 | `ADD AX, 0002` | `0002` | `0004` | `0209` | — | AX = 2 |
+| **4** | Iter 1 | `DEC CX` | `0002` | `0003` | `020A` | — | CX pasa a 3; ZF=0 (no cero) |
+| **5** | Iter 1 | `JNZ 0206` | `0002` | `0003` | `0206` | **Sí** | Salta a 0206h porque ZF=0 |
+| **6** | Iter 2 | `ADD AX, 0002` | `0004` | `0003` | `0209` | — | AX = 4 |
+| **7** | Iter 2 | `DEC CX` | `0004` | `0002` | `020A` | — | CX pasa a 2; ZF=0 |
+| **8** | Iter 2 | `JNZ 0206` | `0004` | `0002` | `0206` | **Sí** | Salta a 0206h porque ZF=0 |
+| **9** | Iter 3 | `ADD AX, 0002` | `0006` | `0002` | `0209` | — | AX = 6 |
+| **10**| Iter 3 | `DEC CX` | `0006` | `0001` | `020A` | — | CX pasa a 1; ZF=0 |
+| **11**| Iter 3 | `JNZ 0206` | `0006` | `0001` | `0206` | **Sí** | Salta a 0206h porque ZF=0 |
+| **12**| Iter 4 | `ADD AX, 0002` | `0008` | `0001` | `0209` | — | AX = 8 |
+| **13**| Iter 4 | `DEC CX` | `0008` | `0000` | `020A` | — | CX pasa a 0; **ZF=1** (activada) |
+| **14**| Iter 4 | `JNZ 0206` | `0008` | `0000` | `020C` | **No** | No salta porque ZF=1; avanza a INT 20 |
+| **15**| Fin | `INT 20` | `0008` | `0000` | `020C` | — | Terminación normal verificada (`AX = 8`) |
+
+#### Comparación de Costo de Ejecución:
+* **Bucle con `LOOP`:** $2\text{ (init)} + 4 \times (\text{ADD} + \text{LOOP}) + 1\text{ (INT 20)} =$ **11 instrucciones ejecutadas**.
+* **Bucle con `DEC/JNZ`:** $2\text{ (init)} + 4 \times (\text{ADD} + \text{DEC} + \text{JNZ}) + 1\text{ (INT 20)} =$ **15 instrucciones ejecutadas**.
+* *Diferencia:* Exactamente **4 instrucciones adicionales** en el bucle manual (1 instrucción extra por iteración requerida para evaluar el salto).
+
+#### Demostración con Comando `G`:
+```dos
+-R IP
+IP 020D
+:200
+-G 20C
+AX=0008  BX=0005  CX=0000  DX=0000  SP=FFFE  BP=0000  SI=0000  DI=0000
+DS=1357  ES=1357  SS=1357  CS=1357  IP=020C   NV UP EI PL ZR NA PE NC
+1357:020C CD20          INT     20
+```
+El comando `G 20C` ejecuta directamente el bucle completo y se detiene en el *breakpoint* `020Ch`, confirmando instantáneamente `AX = 0008h`.
+
+> **Checkpoint 3 (Parte 2):** Evidencia guardada en `capturas/CP3_traza_dec_jnz.png`.
+
+---
+
+## 🧠 Decisiones Técnicas Justificadas (Parte 2)
+
+### Decisión Técnica 3: Selección de Mecanismo de Control de Bucle (LOOP vs. DEC/JNZ)
+> **Pregunta:** Para un bucle contador simple donde `CX` no se utiliza para otro fin, ¿cuál mecanismo se recomienda en términos de bytes e instrucciones por iteración, en qué escenarios se preferiría `DEC/JNZ` y cómo se verifica con `U`?
+
+**Justificación técnica:**  
+Para un bucle de iteración simple donde el registro `CX` funciona estrictamente como contador decreciente, la recomendación técnica inequívoca es utilizar la instrucción dedicada `LOOP`. Desde la perspectiva de la densidad de código máquina, `LOOP 0106` se codifica en solo dos bytes (`E2 FB`), mientras que la combinación funcionalmente equivalente de `DEC CX` seguido de `JNZ 0206` demanda tres bytes (`49` y `75 FA` respectivamente). A nivel de la microarquitectura del procesador 8086, `LOOP` requiere una única fase de búsqueda y decodificación (*instruction fetch*) por cada iteración del ciclo para resolver simultáneamente la reducción del contador y la ramificación condicional, reduciendo el tráfico en el bus de instrucciones en comparación con el esquema compuesto de `DEC/JNZ`, el cual obliga a la Unidad de Interfaz con el Bus a buscar dos instrucciones independientes en cada vuelta del ciclo. Sin embargo, el mecanismo `DEC/JNZ` resulta preferible y necesario en contextos donde la condición de control sea más compleja que un simple decremento a cero, cuando se requiera evaluar banderas adicionales generadas por comparaciones explícitas con `CMP`, o cuando el registro `CX` deba ser empleado obligatoriamente en el cuerpo del bucle para otras operaciones especializadas (tales como desplazamientos variables con `CL` o instrucciones de cadena), obligando a utilizar otro registro de propósito general (como `BX` o `DX`) como contador auxiliar. El estudiante comprueba esta diferencia sin ejecutar el programa mediante el comando `U` de `DEBUG`, contrastando visualmente los desplazamientos consecutivos generados por el ensamblador: la distancia entre el inicio de `LOOP` y la siguiente instrucción es de dos bytes, mientras que el bloque `DEC` más `JNZ` abarca tres bytes de memoria.
+
+---
+
+### Decisión Técnica 4: Comando de Verificación para Bucles de Muchas Iteraciones (T vs. G)
+> **Pregunta:** Para verificar el resultado final de un bucle de 100 iteraciones, ¿por qué `G` es más práctico que `T`, qué información se pierde con `G`, cuándo fue indispensable `T` y qué comando confirma `AX` tras `G`?
+
+**Justificación técnica:**  
+Cuando un algoritmo iterativo involucra un número significativo de ciclos, como un bucle configurado para cien iteraciones (`CX = 0x0064`), la ejecución manual mediante el comando `T` (Trace) resulta completamente ineficiente y propensa al error humano, pues demandaría introducir cientos de comandos individuales para alcanzar la condición de parada. El comando `G` (Go), especificando la dirección de punto de interrupción inmediatamente posterior al bucle (por ejemplo `G 20C`), resulta sustancialmente más práctico porque conmuta la CPU a velocidad de reloj nativa, ejecutando la totalidad de las iteraciones de forma continua y transparente sin pausar la ejecución en cada ciclo intermedio. No obstante, esta velocidad introduce como contrapartida la pérdida total de visibilidad sobre los estados transitorios: el depurador no muestra la evolución gradual del acumulador, la fluctuación de los indicadores de estado en el registro de banderas (`FLAGS`), ni posibles desvíos anómalos que puedan ocurrir en ramas intermedias antes del punto de ruptura. La granularidad fina provista por `T` fue estrictamente indispensable en los Pasos 4, 7 y 11 del laboratorio, dado que el propósito pedagógico y analítico exigía registrar en una tabla de traza formal el comportamiento exacto de los registros y el estado de las banderas (`ZF`, `CF`, `SF`) en cada instrucción ejecutada. Tras completar una ejecución rápida con `G 20C`, el estudiante puede certificar de manera atómica el valor final acumulado en el registro de salida invocando el comando `R AX`, el cual expone de inmediato el valor de 16 bits sin alterar ninguna otra variable del entorno.
+
+---
+
+## 📷 Matriz de Checkpoints y Evidencias Fotográficas
+
+| Checkpoint | Ubicación del Archivo | Descripción del Hito Técnico Verificado |
+| :---: | :--- | :--- |
+| **CP 1 (P1)** | `capturas/CP1_registros.png` | Inspección inicial con `R` y modificación selectiva de `AX = 1234h`. |
+| **CP 2 (P1)** | `capturas/CP2_volcado_memoria.png` | Volcado hexadecimal `D 200 L40` evidenciando el patrón `AB CD EF` generado con `F`. |
+| **CP 3 (P1)** | `capturas/CP3_ensamblado_desensamblado.png` | Ensamblado con `A 100` y correspondencia de bytes desensamblados con `U 100 109`. |
+| **CP 4 (P1)** | `capturas/CP4_memoria_direccionamiento.png` | Modificación con `E 300 78 56`, instrucción `MOV AX, [0300]` y traza `T` resultando en `AX = 5678h`. |
+| **CP 1 (P2)** | `capturas/CP1_traza_suma.png` | Traza completa paso a paso con `T` del programa de suma acumulando `AX = 0012h`. |
+| **CP 2 (P2)** | `capturas/CP2_traza_loop.png` | Traza de las 10 ejecuciones del bucle `LOOP 0106` verificando decremento de `CX` hasta `AX = 0008h`. |
+| **CP 3 (P2)** | `capturas/CP3_traza_dec_jnz.png` | Traza del bucle manual `DEC/JNZ` (15 pasos) y ejecución directa con punto de parada `G 20C`. |
+| **CP 4 (P2)** | `capturas/CP4_resumen_final.png` | Verificación final consolidada de la sesión de trabajo y estado limpio de registros. |
+
+---
+
+## 📜 Conclusiones y Autoría
+
+* La herramienta `DEBUG` permite desmitificar la ejecución en modo real x86, evidenciando que el código y los datos conviven en el mismo espacio lineal y que la interpretación depende exclusivamente del puntero de instrucción `CS:IP`.
+* La instrucción especializada `LOOP` optimiza tanto la huella de memoria (2 bytes frente a 3 bytes de `DEC/JNZ`) como los ciclos de búsqueda de instrucciones de la CPU, consolidando la eficiencia del conjunto CISC x86 para bucles contadores elementales.
+* La combinación metodológica entre la traza exhaustiva (`T`) y la ejecución con puntos de interrupción (`G`) dota al analista de sistemas de la capacidad de alternar entre la verificación microscópica de banderas y la comprobación rápida de resultados algorítmicos.
+
+**Autor:** Eduard Cantillo  
+**Materia:** Arquitectura de Computadores — UFPS  
+**Año Académico:** 2026
