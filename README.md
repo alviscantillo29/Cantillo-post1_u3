@@ -202,5 +202,21 @@ El registro `AX` se carga exactamente con `5678h`, validando la lectura de la me
 
 ## 🧠 Decisiones Técnicas Justificadas (Parte 1)
 
+### Decisión Técnica 1: Verificación No Destructiva de una Escritura en Memoria
+> **Pregunta:** ¿Cuál de los cuatro comandos (`R`, `E`, `F`, `D`) es el apropiado para confirmar que la escritura de memoria del Paso 11 tuvo el efecto esperado sin arriesgar una modificación accidental del estado del programa?
 
-*Documentación en proceso...*
+**Justificación técnica:**  
+En el proceso de inspección y depuración de software en bajo nivel, la integridad del estado del procesador y de la memoria depende estrictamente de elegir herramientas de solo lectura para las etapas de verificación. El comando `D` (Dump) constituye la única opción segura y apropiada entre los cuatro comandos disponibles para comprobar que la modificación realizada en `DS:0300` fue exitosa. Invocar el comando `E` sin la lista explícita de argumentos sitúa al depurador en un modo interactivo donde se imprime en pantalla el valor actual del byte y se suspende la ejecución a la espera de una entrada del operador; en este modo, cualquier pulsación fortuita del teclado o el ingreso erróneo de caracteres sobreescribe inmediatamente la celda de memoria antes de avanzar a la siguiente posición, introduciendo mutaciones no deseadas en el espacio de trabajo. Por su parte, el comando `F` (Fill) tampoco es admisible como método de verificación, dado que su propósito operativo es netamente destructivo y de escritura masiva, diseñado para sobrescribir bloques enteros de memoria con un patrón fijo y no para consultar valores existentes. El comando `R` se restringe al banco de registros del procesador y no permite inspeccionar celdas generales de memoria RAM. En contraposición, `D` garantiza una lectura pura y no invasiva: consulta las celdas direccionadas, las formatea en pantalla en representación hexadecimal y ASCII, y preserva intactos tanto el contenido de la memoria como los registros y las banderas del procesador.
+
+---
+
+### Decisión Técnica 2: Modo de Direccionamiento Inmediato vs. Directo a Memoria
+> **Pregunta:** Comparando `MOV AX, 0005` (`B8 05 00`) con `MOV AX, [0300]` (`A1 00 03`), ¿cuál requiere un ciclo adicional de acceso al bus de memoria, en qué escenarios se prefiere cada uno y cómo se verifican con `U` sin ejecutar el código?
+
+**Justificación técnica:**  
+A pesar de que ambas instrucciones comparten exactamente la misma longitud física de tres bytes en memoria, su comportamiento ante el bus del sistema y sus ciclos de temporización son sustancialmente disímiles debido al modo de direccionamiento implementado. La instrucción `MOV AX, [0300]` con direccionamiento directo a memoria requiere obligatoriamente un ciclo de bus adicional durante su fase de ejecución (*memory read bus cycle*). En la instrucción inmediata `MOV AX, 0005`, el operando fuente viaja embebido dentro del propio flujo de bytes de la instrucción (código de operación `B8` seguido de `05 00`); la Unidad de Interfaz con el Bus (BIU) extrae estos bytes mediante la cola de prebúsqueda (*prefetch queue*) y la Unidad de Ejecución (EU) carga el dato directamente en `AX` sin requerir nuevas transacciones en el bus externo. En cambio, en `MOV AX, [0300]`, los dos bytes finales representan un desplazamiento lineal (`0300h`); una vez decodificada la instrucción, la EU ordena a la BIU realizar un ciclo de lectura sobre el bus externo colocando la dirección efectiva para transferir la palabra desde la memoria RAM hacia el registro `AX`. El direccionamiento directo a memoria es indispensable en escenarios donde los datos son dinámicos, cambian en tiempo de ejecución o residen en estructuras de almacenamiento variables, como buffers de entrada o celdas modificadas previamente con `E`. El direccionamiento inmediato se reserva para constantes matemáticas invariables ya conocidas en tiempo de compilación. Con el comando `U` de `DEBUG`, el estudiante confirma sin ejecutar el código cuál modo fue generado observando los códigos de operación: `B8` identifica una carga inmediata en `AX`, mientras que `A1` denota la optimización de código de máquina para la carga directa del acumulador desde una dirección de memoria.
+
+---
+
+
+*Parte 2 en proceso...*
